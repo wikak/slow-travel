@@ -271,20 +271,30 @@ async function callOpenAICompatible(cfg, systemText, history, question) {
     }
 
     const errBody = await res.json().catch(() => ({}));
+    const detail = errBody?.error?.message || errBody?.error || null;
     console.error(
-      `[AI call] ${new Date().toISOString()} ✗ model=${model} status=${res.status} durationMs=${durationMs} error=${JSON.stringify(errBody?.error || errBody)}`
+      `[AI call] ${new Date().toISOString()} ✗ model=${model} status=${res.status} durationMs=${durationMs} error=${JSON.stringify(detail || errBody)}`
     );
 
     if (res.status === 401) throw new Error("Clé API invalide — vérifiez votre configuration.");
-    if ([402, 404, 429, 502, 503].includes(res.status)) {
+    // Erreur de config serveur (clé absente côté Vercel) : inutile de réessayer
+    // les autres modèles, ça échouera pareil à chaque fois.
+    if (typeof detail === "string" && detail.includes("OPENROUTER_API_KEY")) throw new Error(detail);
+    // 500/502/503 : panne ponctuelle côté fournisseur (souvent un modèle gratuit
+    // surchargé) — on bascule sur le modèle suivant plutôt que d'abandonner.
+    if ([402, 404, 429, 500, 502, 503].includes(res.status)) {
       lastError = new Error(
         res.status === 429
           ? "Limite gratuite atteinte sur tous les modèles — réessayez dans une minute."
+          : detail
+          ? `Modèle "${model}" indisponible (${res.status}) : ${detail}`
           : `Modèle "${model}" indisponible (${res.status}).`
       );
       continue; // modèle suivant
     }
-    throw new Error(`Erreur ${cfg.provider} (${res.status}). Réessayez.`);
+    throw new Error(
+      detail ? `Erreur ${cfg.provider} (${res.status}) : ${detail}` : `Erreur ${cfg.provider} (${res.status}). Réessayez.`
+    );
   }
   throw lastError || new Error("Aucun modèle disponible — réessayez plus tard.");
 }

@@ -10,6 +10,9 @@ export default async function handler(req, res) {
 
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
+    console.error(
+      `[AI call] ${new Date().toISOString()} ✗ OPENROUTER_API_KEY absente côté serveur (process.env).`
+    );
     return res.status(500).json({
       error: "OPENROUTER_API_KEY non configurée dans les variables d'environnement Vercel.",
     });
