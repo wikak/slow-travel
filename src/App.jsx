@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CityView from "./components/CityView.jsx";
 import DetailsModal from "./components/DetailsModal.jsx";
+import ChatWidget from "./components/ChatWidget.jsx";
 
 // Données chargées depuis les assets — aucun upload nécessaire.
 // Remplacez simplement le contenu de ces fichiers par vos exports complets.
@@ -53,6 +54,7 @@ export default function App() {
       </div>
 
       <DetailsModal place={selectedPlace} onClose={() => setSelectedPlace(null)} />
+      <ChatWidget cities={CITIES} activeCityId={activeTab} />
     </div>
   );
 }

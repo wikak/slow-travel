@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Search, SlidersHorizontal, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import PlaceCard from "./PlaceCard.jsx";
 import { computeScore } from "../lib/score.js";
@@ -7,8 +7,8 @@ import { placeKey, priceStart } from "../lib/format.js";
 const PAGE_SIZE = 12; // lieux affichés par page
 
 const DEFAULT_FILTERS = {
-  zone: "",             // "" = toutes les zones
-  category: "",         // "" = toutes les catégories
+  zones: [],            // [] = toutes les zones ; l'ordre de sélection = ordre de l'itinéraire
+  categories: [],       // [] = toutes les catégories
   query: "",            // recherche sur le nom et les types
   minRating: 0,         // note Google minimale
   minReviews: 0,        // nombre d'avis minimal
@@ -36,6 +36,75 @@ function Select({ label, value, onChange, children }) {
   );
 }
 
+// Liste déroulante à cases à cocher (plusieurs valeurs possibles).
+// L'ordre de sélection est conservé : il définit l'ordre de l'itinéraire.
+function MultiSelect({ label, options, values, onChange, allLabel = "Toutes" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const close = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const toggle = (opt) =>
+    onChange(values.includes(opt) ? values.filter((v) => v !== opt) : [...values, opt]);
+
+  const summary =
+    values.length === 0 ? allLabel : values.length === 1 ? values[0] : `${values.length} sélections`;
+
+  return (
+    <div ref={ref} className="relative flex flex-col gap-1 text-xs font-medium text-gray-500">
+      {label}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`px-2 py-2 rounded-lg border bg-white text-sm text-left truncate focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+          values.length > 0 ? "border-indigo-300 text-indigo-700 font-semibold" : "border-gray-200 text-gray-700"
+        }`}
+      >
+        {summary}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-20 mt-1 min-w-full w-56 max-h-64 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1">
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="w-full text-left px-2 py-1.5 rounded text-sm text-gray-500 hover:bg-gray-50"
+          >
+            {allLabel} (tout effacer)
+          </button>
+          {options.map((opt) => {
+            const idx = values.indexOf(opt);
+            return (
+              <label
+                key={opt}
+                className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={idx !== -1}
+                  onChange={() => toggle(opt)}
+                  className="accent-indigo-600"
+                />
+                <span className="truncate flex-1">{opt}</span>
+                {idx !== -1 && values.length > 1 && (
+                  <span className="shrink-0 flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                    {idx + 1}
+                  </span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Toggle({ active, onClick, children }) {
   return (
     <button
@@ -57,9 +126,9 @@ export default function CityView({ data, onDetails }) {
   const [page, setPage] = useState(1);
   const set = (patch) => setF((prev) => ({ ...prev, ...patch }));
 
-  // Catégories disponibles selon la zone choisie
+  // Catégories disponibles selon les zones choisies
   const categories = useMemo(() => {
-    const src = f.zone ? [f.zone] : zones;
+    const src = f.zones.length > 0 ? f.zones : zones;
     const s = new Set();
     src.forEach((z) => {
       Object.entries(data[z] || {}).forEach(([cat, arr]) => {
@@ -67,16 +136,24 @@ export default function CityView({ data, onDetails }) {
       });
     });
     return [...s];
-  }, [data, f.zone, zones]);
+  }, [data, f.zones, zones]);
+
+  // Retirer les catégories sélectionnées qui n'existent plus dans les zones choisies
+  useEffect(() => {
+    setF((prev) => {
+      const kept = prev.categories.filter((c) => categories.includes(c));
+      return kept.length === prev.categories.length ? prev : { ...prev, categories: kept };
+    });
+  }, [categories]);
 
   // Liste filtrée + triée (tous les critères combinés)
   const places = useMemo(() => {
     // 1. Collecte + déduplication (un lieu peut apparaître dans plusieurs catégories)
     const seen = new Map();
-    const srcZones = f.zone ? [f.zone] : zones;
+    const srcZones = f.zones.length > 0 ? f.zones : zones;
     srcZones.forEach((z) => {
       Object.entries(data[z] || {}).forEach(([cat, arr]) => {
-        if (f.category && cat !== f.category) return;
+        if (f.categories.length > 0 && !f.categories.includes(cat)) return;
         (arr || []).forEach((p) => {
           const key = placeKey(p);
           if (!seen.has(key)) seen.set(key, { ...p, _zone: z, _cats: [cat] });
@@ -116,7 +193,14 @@ export default function CityView({ data, onDetails }) {
       reviews: (a, b) => (b.total_ratings_count || 0) - (a.total_ratings_count || 0),
       price: (a, b) => (priceStart(a) ?? Infinity) - (priceStart(b) ?? Infinity),
     };
-    return list.sort(sorters[f.sort] || sorters.score);
+    const base = sorters[f.sort] || sorters.score;
+    // Mode itinéraire : les lieux suivent l'ordre des zones sélectionnées
+    if (f.zones.length > 1) {
+      return list.sort(
+        (a, b) => f.zones.indexOf(a._zone) - f.zones.indexOf(b._zone) || base(a, b)
+      );
+    }
+    return list.sort(base);
   }, [data, zones, f]);
 
   const isFiltered = JSON.stringify(f) !== JSON.stringify(DEFAULT_FILTERS);
@@ -152,15 +236,19 @@ export default function CityView({ data, onDetails }) {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <Select label="Zone" value={f.zone} onChange={(v) => set({ zone: v, category: "" })}>
-            <option value="">Toutes</option>
-            {zones.map((z) => <option key={z} value={z}>{z}</option>)}
-          </Select>
+          <MultiSelect
+            label="Zones"
+            options={zones}
+            values={f.zones}
+            onChange={(vals) => set({ zones: vals })}
+          />
 
-          <Select label="Catégorie" value={f.category} onChange={(v) => set({ category: v })}>
-            <option value="">Toutes</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </Select>
+          <MultiSelect
+            label="Catégories"
+            options={categories}
+            values={f.categories}
+            onChange={(vals) => set({ categories: vals })}
+          />
 
           <Select label="Note min." value={f.minRating} onChange={(v) => set({ minRating: Number(v) })}>
             <option value="0">Toutes</option>
@@ -239,6 +327,19 @@ export default function CityView({ data, onDetails }) {
       </div>
 
       {/* -------- Résultats -------- */}
+      {f.zones.length > 1 && (
+        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+          🗺️ Itinéraire :
+          {f.zones.map((z, i) => (
+            <Fragment key={z}>
+              {i > 0 && <span className="text-indigo-300">→</span>}
+              <span className="px-2 py-0.5 rounded-full bg-white border border-indigo-200">
+                {i + 1}. {z}
+              </span>
+            </Fragment>
+          ))}
+        </p>
+      )}
       <p className="text-sm text-gray-500">
         {places.length} lieu{places.length > 1 ? "x" : ""} trouvé{places.length > 1 ? "s" : ""}
       </p>
@@ -249,9 +350,23 @@ export default function CityView({ data, onDetails }) {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {pagedPlaces.map((p) => (
-              <PlaceCard key={placeKey(p)} place={p} onDetails={onDetails} />
-            ))}
+            {pagedPlaces.map((p, i) => {
+              const showZoneHeader =
+                f.zones.length > 1 && (i === 0 || pagedPlaces[i - 1]._zone !== p._zone);
+              return (
+                <Fragment key={placeKey(p)}>
+                  {showZoneHeader && (
+                    <h3 className="col-span-full flex items-center gap-2 text-sm font-semibold text-indigo-700 mt-1 first:mt-0">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] font-bold">
+                        {f.zones.indexOf(p._zone) + 1}
+                      </span>
+                      {p._zone}
+                    </h3>
+                  )}
+                  <PlaceCard place={p} onDetails={onDetails} />
+                </Fragment>
+              );
+            })}
           </div>
 
           {totalPages > 1 && (
