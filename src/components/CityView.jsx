@@ -255,7 +255,7 @@ export default function CityView({ data, onDetails }) {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}

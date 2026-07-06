@@ -23,14 +23,16 @@ function ScoreBreakdown({ place }) {
             {s.total}/100
           </span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2 sm:space-y-1.5">
           {rows.map(([label, val, max]) => (
-            <div key={label} className="flex items-center gap-2 text-xs">
-              <span className="w-56 shrink-0 text-gray-600">{label}</span>
-              <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                <div className="h-full bg-indigo-500" style={{ width: `${(val / max) * 100}%` }} />
+            <div key={label} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 text-xs">
+              <span className="sm:w-56 sm:shrink-0 text-gray-600">{label}</span>
+              <div className="flex items-center gap-2 sm:flex-1">
+                <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-full bg-indigo-500" style={{ width: `${(val / max) * 100}%` }} />
+                </div>
+                <span className="w-12 shrink-0 text-right text-gray-500">{val}/{max}</span>
               </div>
-              <span className="w-12 text-right text-gray-500">{val}/{max}</span>
             </div>
           ))}
         </div>
@@ -60,7 +62,22 @@ export default function DetailsModal({ place, onClose }) {
       >
         <div className="flex items-start justify-between p-5 border-b border-gray-100">
           <div className="pr-4">
-            <h2 className="text-xl font-bold text-gray-900">{place.name}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-gray-900">{place.name}</h2>
+              {place.address && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    `${place.name} ${place.address}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Ouvrir l'adresse sur Google Maps"
+                  className="shrink-0 p-1.5 rounded-full text-indigo-600 hover:bg-indigo-50 transition-colors"
+                >
+                  <MapPin size={18} />
+                </a>
+              )}
+            </div>
             <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
               <Stars rating={place.global_rating} />
               <span>· {place.total_ratings_count?.toLocaleString("fr-FR")} avis</span>
