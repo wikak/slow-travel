@@ -92,6 +92,7 @@ export function buildIndex(cities) {
             zone,
             cat,
             name: p.name || "",
+            address: p.address || "",
             rating: p.global_rating || 0,
             reviews: p.total_ratings_count || 0,
             priceLevel: p.price_level || "",
@@ -200,6 +201,20 @@ export function condense(rows) {
       return `${r.name} | ${r.zone.split(",")[0]} (${r.city}) | ${r.cat} | ★${r.rating} (${r.reviews} avis) | score ${r.score} | ${price}`;
     })
     .join("\n");
+}
+
+// ---------- Liens externes par lieu ----------
+// On génère les URL nous-mêmes (jamais via le LLM, qui inventerait des liens) :
+// - Google Maps : recherche "nom + adresse" (même format que la fiche détaillée).
+// - TikTok : recherche "nom + ville" pour tomber sur des vidéos du lieu.
+export function placeLinks(row) {
+  const mapsQuery = `${row.name} ${row.address || row.cityFull || ""}`.trim();
+  const tiktokQuery = `${row.name} ${row.cityFull || ""}`.trim();
+  return {
+    name: row.name,
+    maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`,
+    tiktok: `https://www.tiktok.com/search?q=${encodeURIComponent(tiktokQuery)}`,
+  };
 }
 
 const SYSTEM_PROMPT = `Tu es l'assistant voyage de "Explorateur de lieux", une app de slow-travel en Afrique du Sud (Johannesburg, Durban, Cape Town).
@@ -380,5 +395,7 @@ export async function askAssistant({ question, history, cities, activeCityId }) 
       : await callOpenAICompatible(cfg, systemText, history, question);
 
   if (!text) throw new Error("Réponse vide du modèle — réessayez.");
-  return text;
+  // On renvoie aussi les lieux transmis au modèle : le chat peut ainsi rendre
+  // cliquables (Google Maps + TikTok) les noms cités, sans risque d'URL inventée.
+  return { text, places: relevant.map(placeLinks) };
 }

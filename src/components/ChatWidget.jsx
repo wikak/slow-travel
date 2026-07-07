@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, Video } from "lucide-react";
 import { askAssistant, hasApiKey } from "../lib/assistant.js";
 
 const SUGGESTIONS = [
@@ -8,16 +8,87 @@ const SUGGESTIONS = [
   "Journée culture + café à Maboneng, coût estimé ?",
 ];
 
-// Mise en forme légère du markdown renvoyé par le modèle (gras + listes)
-function renderText(text) {
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Construit un détecteur des noms de lieux cités dans la réponse.
+// `places` = lieux réellement transmis au modèle ({ name, maps, tiktok }),
+// donc les seuls qu'il a pu mentionner : aucun lien inventé possible.
+function buildLinker(places) {
+  if (!places?.length) return null;
+  const lookup = new Map();
+  for (const p of places) {
+    if (p.name) lookup.set(p.name.toLowerCase(), p);
+  }
+  // Noms triés du plus long au plus court : on relie « Camps Bay Coffee Club »
+  // en entier plutôt que le « Camps Bay » qu'il contient.
+  const names = [...lookup.keys()]
+    .filter((n) => n.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  if (!names.length) return null;
+  return { lookup, regex: new RegExp(names.map(escapeRegExp).join("|"), "gi") };
+}
+
+// Remplace, dans un fragment de texte, chaque nom de lieu connu par un lien
+// Google Maps + une icône vers une recherche TikTok du lieu.
+function linkify(text, linker, keyBase) {
+  if (!linker) return text;
+  const { lookup, regex } = linker;
+  const out = [];
+  let last = 0;
+  regex.lastIndex = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    const info = lookup.get(m[0].toLowerCase());
+    if (m.index > last) out.push(text.slice(last, m.index));
+    if (info) {
+      out.push(
+        <span key={`${keyBase}-${m.index}`} className="whitespace-nowrap">
+          <a
+            href={info.maps}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Ouvrir sur Google Maps"
+            className="font-medium text-indigo-600 underline decoration-dotted underline-offset-2 hover:text-indigo-800"
+          >
+            {m[0]}
+          </a>
+          {/* Puce étiquetée : cible tactile confortable sur mobile (vs. icône seule) */}
+          <a
+            href={info.tiktok}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Voir des vidéos TikTok"
+            className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-pink-50 px-2 py-1 align-middle text-[11px] font-semibold leading-none text-pink-600 active:bg-pink-100 hover:bg-pink-100"
+          >
+            <Video size={12} /> TikTok
+          </a>
+        </span>
+      );
+    } else {
+      out.push(m[0]);
+    }
+    last = m.index + m[0].length;
+    if (regex.lastIndex === m.index) regex.lastIndex++; // sécurité anti-boucle
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+// Mise en forme légère du markdown renvoyé par le modèle (gras + listes),
+// avec liens Google Maps / TikTok sur les noms de lieux.
+function renderText(text, places) {
+  const linker = buildLinker(places);
   return text.split("\n").map((line, i) => {
-    const parts = line.split(/\*\*(.+?)\*\*/g).map((seg, j) =>
-      j % 2 === 1 ? <strong key={j}>{seg}</strong> : seg
-    );
     const isBullet = /^\s*[-*•]\s+/.test(line);
+    const body = isBullet ? line.replace(/^\s*[-*•]\s+/, "") : line;
+    // Découpe le gras (**…**) puis relie les lieux à l'intérieur de chaque segment.
+    const inline = body.split(/\*\*(.+?)\*\*/g).map((seg, j) => {
+      const linked = linkify(seg, linker, `${i}-${j}`);
+      return j % 2 === 1 ? <strong key={j}>{linked}</strong> : <span key={j}>{linked}</span>;
+    });
     return (
       <p key={i} className={`${isBullet ? "pl-3" : ""} ${line.trim() === "" ? "h-2" : ""}`}>
-        {isBullet ? "• " + line.replace(/^\s*[-*•]\s+/, "") : parts.length ? parts : line}
+        {isBullet ? <>{"• "}{inline}</> : inline}
       </p>
     );
   });
@@ -42,8 +113,8 @@ export default function ChatWidget({ cities, activeCityId }) {
     setMessages((prev) => [...prev, { role: "user", text: question }]);
     setLoading(true);
     try {
-      const answer = await askAssistant({ question, history, cities, activeCityId });
-      setMessages((prev) => [...prev, { role: "model", text: answer }]);
+      const { text, places } = await askAssistant({ question, history, cities, activeCityId });
+      setMessages((prev) => [...prev, { role: "model", text, places }]);
     } catch (e) {
       setMessages((prev) => [...prev, { role: "error", text: e.message }]);
     } finally {
@@ -117,7 +188,7 @@ export default function ChatWidget({ cities, activeCityId }) {
                       : "bg-white text-gray-800 border border-gray-200 rounded-bl-sm"
                   }`}
                 >
-                  {m.role === "model" ? renderText(m.text) : m.text}
+                  {m.role === "model" ? renderText(m.text, m.places) : m.text}
                 </div>
               </div>
             ))}

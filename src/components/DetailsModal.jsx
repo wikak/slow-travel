@@ -1,4 +1,4 @@
-import { X, MapPin, Tag, MessageSquare } from "lucide-react";
+import { X, MapPin, Tag, MessageSquare, Video, ExternalLink } from "lucide-react";
 import { computeScore, scoreColor } from "../lib/score.js";
 import { formatDate } from "../lib/format.js";
 import { Stars, TypeBadges, PriceInfo } from "./Shared.jsx";
@@ -54,6 +54,10 @@ function ScoreBreakdown({ place }) {
 export default function DetailsModal({ place, onClose }) {
   if (!place) return null;
   const reviews = place.reviews_last_12_months || [];
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${place.name} ${place.address || ""}`.trim()
+  )}`;
+  const tiktokUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(place.name)}`;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
       <div
@@ -62,22 +66,7 @@ export default function DetailsModal({ place, onClose }) {
       >
         <div className="flex items-start justify-between p-5 border-b border-gray-100">
           <div className="pr-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-gray-900">{place.name}</h2>
-              {place.address && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    `${place.name} ${place.address}`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Ouvrir l'adresse sur Google Maps"
-                  className="shrink-0 p-1.5 rounded-full text-indigo-600 hover:bg-indigo-50 transition-colors"
-                >
-                  <MapPin size={18} />
-                </a>
-              )}
-            </div>
+            <h2 className="text-xl font-bold text-gray-900">{place.name}</h2>
             <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
               <Stars rating={place.global_rating} />
               <span>· {place.total_ratings_count?.toLocaleString("fr-FR")} avis</span>
@@ -89,6 +78,28 @@ export default function DetailsModal({ place, onClose }) {
         </div>
 
         <div className="overflow-y-auto p-5 space-y-5">
+          {/* Actions bien visibles : itinéraire Maps (principal) + vidéos TikTok */}
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 transition-colors"
+            >
+              <MapPin size={16} /> Ouvrir dans Google Maps
+              <ExternalLink size={14} className="opacity-70" />
+            </a>
+            <a
+              href={tiktokUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:border-pink-300 hover:text-pink-600 transition-colors"
+            >
+              <Video size={16} /> Vidéos TikTok
+              <ExternalLink size={14} className="opacity-70" />
+            </a>
+          </div>
+
           <ScoreBreakdown place={place} />
 
           <section>

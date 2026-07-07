@@ -1,5 +1,6 @@
 .DS_STORE
 node_modules
+dist/
 scripts/flow/*/.flowconfig
 .flowconfig
 *~
@@ -28,6 +29,8 @@ chrome-user-data
 /.worktrees
 .claude/*.local.*
 .claude/worktrees
+
+
 
 packages/react-devtools-core/dist
 packages/react-devtools-extensions/chrome/build
