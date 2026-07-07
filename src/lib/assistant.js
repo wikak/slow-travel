@@ -206,14 +206,16 @@ export function condense(rows) {
 // ---------- Liens externes par lieu ----------
 // On génère les URL nous-mêmes (jamais via le LLM, qui inventerait des liens) :
 // - Google Maps : recherche "nom + adresse" (même format que la fiche détaillée).
-// - TikTok : recherche "nom + ville" pour tomber sur des vidéos du lieu.
+// - TikTok : recherche Google "nom + ville tiktok". On passe par Google plutôt
+//   que par tiktok.com/search car sur mobile ce dernier ouvre l'app TikTok et
+//   bute sur un mur de connexion ; la recherche Google reste dans le navigateur.
 export function placeLinks(row) {
   const mapsQuery = `${row.name} ${row.address || row.cityFull || ""}`.trim();
-  const tiktokQuery = `${row.name} ${row.cityFull || ""}`.trim();
+  const tiktokQuery = `${row.name} ${row.cityFull || ""} tiktok`.trim();
   return {
     name: row.name,
     maps: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`,
-    tiktok: `https://www.tiktok.com/search?q=${encodeURIComponent(tiktokQuery)}`,
+    tiktok: `https://www.google.com/search?q=${encodeURIComponent(tiktokQuery)}`,
   };
 }
 

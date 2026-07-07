@@ -57,7 +57,11 @@ export default function DetailsModal({ place, onClose }) {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${place.name} ${place.address || ""}`.trim()
   )}`;
-  const tiktokUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(place.name)}`;
+  // Recherche Google "nom + ville tiktok" : sur mobile, tiktok.com/search ouvre
+  // l'app et bute sur un mur de connexion ; Google reste dans le navigateur.
+  const tiktokUrl = `https://www.google.com/search?q=${encodeURIComponent(
+    `${place.name} ${place.city_full || place.city || ""} tiktok`.trim()
+  )}`;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
       <div

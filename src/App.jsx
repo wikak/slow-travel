@@ -49,8 +49,9 @@ export default function App() {
           ))}
         </div>
 
-        {/* key={city.id} : réinitialise les filtres quand on change de ville */}
-        <CityView key={city.id} data={city.data} onDetails={setSelectedPlace} />
+        {/* key={city.id} : remonte la vue quand on change de ville
+            (les filtres sont restaurés depuis localStorage par ville) */}
+        <CityView key={city.id} cityId={city.id} data={city.data} onDetails={setSelectedPlace} />
       </div>
 
       <DetailsModal place={selectedPlace} onClose={() => setSelectedPlace(null)} />

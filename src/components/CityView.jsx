@@ -21,6 +21,32 @@ const DEFAULT_FILTERS = {
   sort: "score",        // score | rating | reviews | price
 };
 
+// Persistance des filtres dans localStorage, par ville.
+const filtersKey = (cityId) => `places-explorer:filters:${cityId}`;
+
+function loadFilters(cityId) {
+  try {
+    const raw = localStorage.getItem(filtersKey(cityId));
+    if (!raw) return DEFAULT_FILTERS;
+    // Fusion avec les valeurs par défaut : tolère les anciens formats/clés manquantes.
+    return { ...DEFAULT_FILTERS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
+
+function saveFilters(cityId, f) {
+  try {
+    if (JSON.stringify(f) === JSON.stringify(DEFAULT_FILTERS)) {
+      localStorage.removeItem(filtersKey(cityId));
+    } else {
+      localStorage.setItem(filtersKey(cityId), JSON.stringify(f));
+    }
+  } catch {
+    // stockage indisponible (mode privé, quota) — on ignore silencieusement
+  }
+}
+
 function Select({ label, value, onChange, children }) {
   return (
     <label className="flex flex-col gap-1 text-xs font-medium text-gray-500">
@@ -120,11 +146,16 @@ function Toggle({ active, onClick, children }) {
   );
 }
 
-export default function CityView({ data, onDetails }) {
+export default function CityView({ cityId, data, onDetails }) {
   const zones = Object.keys(data);
-  const [f, setF] = useState(DEFAULT_FILTERS);
+  const [f, setF] = useState(() => loadFilters(cityId));
   const [page, setPage] = useState(1);
   const set = (patch) => setF((prev) => ({ ...prev, ...patch }));
+
+  // Sauvegarde des filtres à chaque changement (par ville).
+  useEffect(() => {
+    saveFilters(cityId, f);
+  }, [cityId, f]);
 
   // Catégories disponibles selon les zones choisies
   const categories = useMemo(() => {
